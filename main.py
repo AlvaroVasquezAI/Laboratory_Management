@@ -52,12 +52,11 @@ class LabManagementSystem(ctk.CTk):
         self.conn = sqlite3.connect('lab_management.db')
         self.cursor = self.conn.cursor()
 
-        # Create teachers table
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS teachers (
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL,
-                subject TEXT,
+                subjects TEXT, 
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -212,33 +211,197 @@ class LabManagementSystem(ctk.CTk):
         """Setup teacher management interface"""
         # Header
         self.teachers_label = ctk.CTkLabel(
-            self.teachers_frame, text="Manage Teachers",
+            self.teachers_frame, text="Teachers Management",
             font=ctk.CTkFont(size=20, weight="bold"))
         self.teachers_label.grid(row=0, column=0, padx=20, pady=20, columnspan=2)
 
-        # Teacher list
-        self.teachers_list = ctk.CTkTextbox(self.teachers_frame, height=200, width=400)
-        self.teachers_list.grid(row=1, column=0, padx=20, pady=10, columnspan=2)
+        # Create teachers table
+        self.setup_teachers_table()
 
-        # Add teacher form
-        self.add_teacher_frame = ctk.CTkFrame(self.teachers_frame)
-        self.add_teacher_frame.grid(row=2, column=0, padx=20, pady=10, columnspan=2)
+        # Add teacher section
+        self.setup_add_teacher_section()
 
-        # Teacher form fields
-        self.teacher_name_label = ctk.CTkLabel(self.add_teacher_frame, text="Name:")
-        self.teacher_name_label.grid(row=0, column=0, padx=20, pady=5)
-        self.teacher_name_entry = ctk.CTkEntry(self.add_teacher_frame, width=200)
-        self.teacher_name_entry.grid(row=0, column=1, padx=20, pady=5)
+    def setup_teachers_table(self):
+        """Setup table to display teachers information"""
+        # Table frame
+        table_frame = ctk.CTkFrame(self.teachers_frame)
+        table_frame.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
 
-        self.teacher_subject_label = ctk.CTkLabel(self.add_teacher_frame, text="Subject:")
-        self.teacher_subject_label.grid(row=1, column=0, padx=20, pady=5)
-        self.teacher_subject_entry = ctk.CTkEntry(self.add_teacher_frame, width=200)
-        self.teacher_subject_entry.grid(row=1, column=1, padx=20, pady=5)
+        # Table headers
+        headers = ["ID", "Name", "Subjects", "Number of Subjects", "Practices Uploaded"]
+        for i, header in enumerate(headers):
+            label = ctk.CTkLabel(
+                table_frame, 
+                text=header,
+                font=ctk.CTkFont(weight="bold")
+            )
+            label.grid(row=0, column=i, padx=10, pady=5, sticky="w")
 
+        # Create scrollable frame for table content
+        self.teachers_table = ctk.CTkScrollableFrame(table_frame, height=300)
+        self.teachers_table.grid(row=1, column=0, columnspan=len(headers), sticky="nsew", padx=10, pady=5)
+
+        # Update table content
+        self.update_teachers_table()
+
+    def update_teachers_table(self):
+        """Update teachers table with current data"""
+        # Clear existing content
+        for widget in self.teachers_table.winfo_children():
+            widget.destroy()
+
+        # Get teachers data
+        self.cursor.execute("""
+            SELECT 
+                t.id,
+                t.name,
+                t.subjects,
+                (SELECT COUNT(*) FROM practices WHERE teacher_id = t.id) as practice_count
+            FROM teachers t
+        """)
+        teachers = self.cursor.fetchall()
+
+        # Display teachers
+        for row, teacher in enumerate(teachers):
+            # ID
+            ctk.CTkLabel(self.teachers_table, text=str(teacher[0])).grid(
+                row=row, column=0, padx=10, pady=5, sticky="w")
+            
+            # Name
+            ctk.CTkLabel(self.teachers_table, text=teacher[1]).grid(
+                row=row, column=1, padx=10, pady=5, sticky="w")
+            
+            # Subjects (comma-separated list)
+            subjects = teacher[2].split(',') if teacher[2] else []
+            ctk.CTkLabel(self.teachers_table, text=', '.join(subjects)).grid(
+                row=row, column=2, padx=10, pady=5, sticky="w")
+            
+            # Number of subjects
+            ctk.CTkLabel(self.teachers_table, text=str(len(subjects))).grid(
+                row=row, column=3, padx=10, pady=5, sticky="w")
+            
+            # Practices count
+            ctk.CTkLabel(self.teachers_table, text=str(teacher[3])).grid(
+                row=row, column=4, padx=10, pady=5, sticky="w")
+        
+    def setup_add_teacher_section(self):
+        """Setup section for adding new teachers"""
+        # Add teacher frame
+        add_frame = ctk.CTkFrame(self.teachers_frame)
+        add_frame.grid(row=2, column=0, padx=20, pady=20, sticky="nsew")
+
+        # Section title
+        add_title = ctk.CTkLabel(
+            add_frame, 
+            text="Add New Teacher",
+            font=ctk.CTkFont(size=16, weight="bold")
+        )
+        add_title.grid(row=0, column=0, columnspan=2, padx=20, pady=10)
+
+        # Teacher name
+        self.teacher_name_label = ctk.CTkLabel(add_frame, text="Name:")
+        self.teacher_name_label.grid(row=1, column=0, padx=20, pady=5)
+        self.teacher_name_entry = ctk.CTkEntry(add_frame, width=200)
+        self.teacher_name_entry.grid(row=1, column=1, padx=20, pady=5)
+
+        # Subjects (with add button)
+        self.teacher_subjects_label = ctk.CTkLabel(add_frame, text="Subjects:")
+        self.teacher_subjects_label.grid(row=2, column=0, padx=20, pady=5)
+        
+        subjects_frame = ctk.CTkFrame(add_frame)
+        subjects_frame.grid(row=2, column=1, padx=20, pady=5, sticky="ew")
+        
+        self.subject_entry = ctk.CTkEntry(subjects_frame, width=150)
+        self.subject_entry.grid(row=0, column=0, padx=5)
+        
+        self.subjects_list = []  # Store added subjects
+        
+        add_subject_btn = ctk.CTkButton(
+            subjects_frame, 
+            text="+", 
+            width=30,
+            command=self.add_subject_to_list
+        )
+        add_subject_btn.grid(row=0, column=1, padx=5)
+
+        # Display added subjects
+        self.subjects_display = ctk.CTkTextbox(add_frame, height=60, width=200)
+        self.subjects_display.grid(row=3, column=1, padx=20, pady=5)
+
+        # Admin password
+        self.password_label = ctk.CTkLabel(add_frame, text="Admin Password:")
+        self.password_label.grid(row=4, column=0, padx=20, pady=5)
+        self.password_entry = ctk.CTkEntry(add_frame, width=200, show="*")
+        self.password_entry.grid(row=4, column=1, padx=20, pady=5)
+
+        # Add teacher button
         self.add_teacher_button = ctk.CTkButton(
-            self.add_teacher_frame, text="Add Teacher",
-            command=self.add_teacher)
-        self.add_teacher_button.grid(row=2, column=0, columnspan=2, pady=10)
+            add_frame, 
+            text="Add Teacher",
+            command=self.add_teacher
+        )
+        self.add_teacher_button.grid(row=5, column=0, columnspan=2, pady=20)
+
+    def add_subject_to_list(self):
+        """Add subject to the list of subjects"""
+        subject = self.subject_entry.get().strip()
+        if subject:
+            if subject not in self.subjects_list:
+                self.subjects_list.append(subject)
+                self.update_subjects_display()
+            self.subject_entry.delete(0, 'end')
+
+    def update_subjects_display(self):
+        """Update the display of added subjects"""
+        self.subjects_display.delete('1.0', 'end')
+        for subject in self.subjects_list:
+            self.subjects_display.insert('end', f"• {subject}\n")
+
+    def add_teacher(self):
+        """Add new teacher to database with password verification"""
+        ADMIN_PASSWORD = "123"  # Set your admin password
+
+        name = self.teacher_name_entry.get()
+        password = self.password_entry.get()
+
+        if not name:
+            messagebox.showerror("Error", "Teacher name is required")
+            return
+
+        if not self.subjects_list:
+            messagebox.showerror("Error", "At least one subject is required")
+            return
+
+        if password != ADMIN_PASSWORD:
+            messagebox.showerror("Error", "Invalid admin password")
+            return
+
+        try:
+            # Insert teacher into database
+            self.cursor.execute("""
+                INSERT INTO teachers (name, subjects)
+                VALUES (?, ?)
+            """, (name, ','.join(self.subjects_list)))
+            self.conn.commit()
+
+            # Update UI
+            self.add_activity_log(f"New teacher added: {name}")
+            self.update_statistics()
+            self.update_teachers_table()
+            
+            # Clear form
+            self.teacher_name_entry.delete(0, "end")
+            self.password_entry.delete(0, "end")
+            self.subjects_list.clear()
+            self.update_subjects_display()
+            
+            # Update teacher combo box in upload form
+            self.teacher_combo.configure(values=self.get_teacher_names())
+            
+            messagebox.showinfo("Success", "Teacher added successfully!")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to add teacher: {str(e)}")
 
     # Database and File Operations
     def get_teacher_names(self):
@@ -354,40 +517,6 @@ class LabManagementSystem(ctk.CTk):
         self.upload_file_button.configure(text="Select File")
         if hasattr(self, 'selected_file_path'):
             del self.selected_file_path
-
-    def add_teacher(self):
-        """Add new teacher to database"""
-        name = self.teacher_name_entry.get()
-        subject = self.teacher_subject_entry.get()
-
-        if not name:
-            messagebox.showerror("Error", "Teacher name is required")
-            return
-
-        try:
-            # Insert teacher into database
-            self.cursor.execute("""
-                INSERT INTO teachers (name, subject)
-                VALUES (?, ?)
-            """, (name, subject))
-            self.conn.commit()
-
-            # Update UI
-            self.teachers_list.insert("end", f"- {name} ({subject})\n")
-            self.add_activity_log(f"New teacher added: {name}")
-            self.update_statistics()
-            
-            # Clear form
-            self.teacher_name_entry.delete(0, "end")
-            self.teacher_subject_entry.delete(0, "end")
-            
-            # Update teacher combo box in upload form
-            self.teacher_combo.configure(values=self.get_teacher_names())
-            
-            messagebox.showinfo("Success", "Teacher added successfully!")
-            
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to add teacher: {str(e)}")
 
     def search_practices(self):
         """Search practices in database"""
