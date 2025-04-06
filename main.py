@@ -15,6 +15,9 @@ class LabManagementSystem(ctk.CTk):
     def __init__(self):
         super().__init__()
 
+        # Initialize subjects list
+        self.subjects_list = []  # Add this line
+        
         # Initialize database
         self.setup_database()
         
@@ -387,18 +390,27 @@ class LabManagementSystem(ctk.CTk):
         self.teacher_name_entry = ctk.CTkEntry(add_frame, width=200)
         self.teacher_name_entry.grid(row=1, column=1, padx=20, pady=5)
 
-        # Subjects (with add button)
+        # Subjects section
         self.teacher_subjects_label = ctk.CTkLabel(add_frame, text="Subjects:")
         self.teacher_subjects_label.grid(row=2, column=0, padx=20, pady=5)
-        
+
         subjects_frame = ctk.CTkFrame(add_frame)
         subjects_frame.grid(row=2, column=1, padx=20, pady=5, sticky="ew")
-        
-        self.subject_entry = ctk.CTkEntry(subjects_frame, width=150)
-        self.subject_entry.grid(row=0, column=0, padx=5)
-        
-        self.subjects_list = []  # Store added subjects
-        
+
+        # Create a frame for subject selection
+        subject_selection_frame = ctk.CTkFrame(subjects_frame)
+        subject_selection_frame.grid(row=0, column=0, sticky="ew")
+
+        # Existing subjects dropdown with entry
+        existing_subjects = self.get_existing_subjects()
+        self.subject_combo = ctk.CTkComboBox(
+            subject_selection_frame,
+            width=200,
+            values=existing_subjects
+        )
+        self.subject_combo.grid(row=0, column=0, padx=5)
+
+        # Add subject button
         add_subject_btn = ctk.CTkButton(
             subjects_frame, 
             text="+", 
@@ -407,9 +419,9 @@ class LabManagementSystem(ctk.CTk):
         )
         add_subject_btn.grid(row=0, column=1, padx=5)
 
-        # Display added subjects
-        self.subjects_display = ctk.CTkTextbox(add_frame, height=60, width=200)
-        self.subjects_display.grid(row=3, column=1, padx=20, pady=5)
+        # Create frame for displaying subjects
+        self.subjects_display_frame = ctk.CTkFrame(add_frame)
+        self.subjects_display_frame.grid(row=3, column=1, padx=20, pady=5, sticky="ew")
 
         # Admin password
         self.password_label = ctk.CTkLabel(add_frame, text="Admin Password:")
@@ -427,18 +439,51 @@ class LabManagementSystem(ctk.CTk):
 
     def add_subject_to_list(self):
         """Add subject to the list of subjects"""
-        subject = self.subject_entry.get().strip()
-        if subject:
-            if subject not in self.subjects_list:
-                self.subjects_list.append(subject)
-                self.update_subjects_display()
-            self.subject_entry.delete(0, 'end')
+        subject = self.subject_combo.get().strip()
+        
+        if not subject:
+            return
+        
+        # Check if subject already exists (case-insensitive)
+        existing_subjects = self.get_existing_subjects()
+        if any(existing.lower() == subject.lower() for existing in existing_subjects):
+            # If it exists, use the existing case
+            subject = next(existing for existing in existing_subjects 
+                        if existing.lower() == subject.lower())
+        
+        # Check if subject is already in the list (case-insensitive)
+        if any(existing.lower() == subject.lower() for existing in self.subjects_list):
+            messagebox.showwarning("Warning", "This subject has already been added")
+            return
+        
+        # Add the subject
+        self.subjects_list.append(subject)
+        self.update_subjects_display()
+        self.subject_combo.set("")  # Clear the input
 
     def update_subjects_display(self):
-        """Update the display of added subjects"""
-        self.subjects_display.delete('1.0', 'end')
-        for subject in self.subjects_list:
-            self.subjects_display.insert('end', f"• {subject}\n")
+        """Update the display of added subjects with delete buttons"""
+        # Clear existing display
+        for widget in self.subjects_display_frame.winfo_children():
+            widget.destroy()
+
+        # Add each subject with a delete button
+        for i, subject in enumerate(self.subjects_list):
+            subject_frame = ctk.CTkFrame(self.subjects_display_frame)
+            subject_frame.pack(fill="x", padx=5, pady=2)
+
+            # Subject label
+            ctk.CTkLabel(subject_frame, text=f"• {subject}").pack(side="left", padx=5)
+
+            # Delete button
+            delete_btn = ctk.CTkButton(
+                subject_frame,
+                text="×",
+                width=20,
+                height=20,
+                command=lambda s=subject: self.delete_subject(s)
+            )
+            delete_btn.pack(side="right", padx=5)
 
     def add_teacher(self):
         """Add new teacher to database with password verification"""
@@ -1021,6 +1066,39 @@ class LabManagementSystem(ctk.CTk):
     def get_practice_path(self, teacher_name, subject, filename):
         """Helper function to get the full path for a practice file"""
         return os.path.join(self.base_dir, teacher_name, subject, filename)
+    
+    def get_existing_subjects(self):
+        """Get all unique subjects from the database"""
+        try:
+            self.cursor.execute("SELECT subjects FROM teachers")
+            all_subjects = self.cursor.fetchall()
+            unique_subjects = set()
+            for subjects_str in all_subjects:
+                if subjects_str[0]:  # Check if not None
+                    subjects = subjects_str[0].split(',')
+                    unique_subjects.update(subject.strip() for subject in subjects)
+            return sorted(list(unique_subjects))
+        except Exception as e:
+            print(f"Error getting subjects: {e}")
+            return []
+
+    
+    def delete_subject(self, subject):
+        """Remove a subject from the list"""
+        if subject in self.subjects_list:
+            self.subjects_list.remove(subject)
+            self.update_subjects_display()
+        
+    def on_subject_select(self, choice):
+        """Handle subject selection from dropdown"""
+        if choice and choice not in self.subjects_list:
+            self.subjects_list.append(choice)
+            self.update_subjects_display()
+
+    def on_subject_combo_select(self, choice):
+        """Handle selection from dropdown"""
+        if choice:
+            self.subject_entry.delete(0, 'end')  # Clear entry field
 
     def home_button_event(self):
         self.select_frame_by_name("home")
