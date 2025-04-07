@@ -12,33 +12,88 @@ import fitz  # PyMuPDF
 from PIL import Image, ImageTk
 
 class LabManagementSystem(ctk.CTk):
+
     def __init__(self):
         super().__init__()
 
+        # Set theme and appearance
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("blue")
+
+        # Define styles after window initialization
+        self.button_style = {
+            "height": 50,
+            "font": ctk.CTkFont(size=16, weight="bold"),
+            "fg_color": "gray30",
+            "hover_color": "gray40",
+            "corner_radius": 8
+        }
+
+        self.entry_style = {
+            "height": 40,
+            "font": ctk.CTkFont(size=16),
+            "corner_radius": 8
+        }
+
+        self.label_style = {
+            "font": ctk.CTkFont(size=16),
+            "text_color": "gray90"
+        }
+
         # Initialize subjects list
-        self.subjects_list = []  # Add this line
+        self.subjects_list = []
         
-        # Initialize database
+        # Initialize database and directories
         self.setup_database()
-        
-        # Create necessary directories
         self.setup_directories()
 
         # Configure window
         self.title("Laboratory Practice Management System")
-        self.geometry("1100x680")
+        self.attributes("-fullscreen", True)
+        self.fullscreen = True
+        self.bind("<Escape>", self.exit_fullscreen)
         
-        # Configure grid layout
+        # Get screen width and height
+        screen_width = self.winfo_screenwidth()
+        
+        # Calculate widths
+        nav_width = int(screen_width * 0.25)  # 25% of screen width
+        content_width = int(screen_width * 0.75)  # 75% of screen width
+        
+        # Configure main grid layout with fixed proportions
         self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=1)
+        self.grid_columnconfigure(0, minsize=nav_width, weight=0)  # Navigation panel - fixed width
+        self.grid_columnconfigure(1, minsize=content_width, weight=1)  # Content area
 
-        # Create navigation frame
+        # Create and setup frames
         self.setup_navigation_frame()
+        self.setup_main_frames()
+        
+        # Show default frame
+        self.select_frame_by_name("home")
 
-        # Create main content frames
-        self.home_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
-        self.upload_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
-        self.teachers_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
+    def setup_main_frames(self):
+        """Setup all main content frames"""
+        # Calculate content width (75% of screen width)
+        content_width = int(self.winfo_screenwidth() * 0.75)
+        
+        frame_style = {
+            "corner_radius": 0,
+            "fg_color": "transparent",
+            "border_width": 2,
+            "border_color": "gray30",
+            "width": content_width
+        }
+
+        # Create main content frames with consistent sizing
+        self.home_frame = ctk.CTkFrame(self, **frame_style)
+        self.upload_frame = ctk.CTkFrame(self, **frame_style)
+        self.teachers_frame = ctk.CTkFrame(self, **frame_style)
+        self.consult_frame = ctk.CTkFrame(self, **frame_style)
+
+        # Prevent frames from resizing
+        for frame in [self.home_frame, self.upload_frame, self.teachers_frame, self.consult_frame]:
+            frame.grid_propagate(False)
 
         # Initialize frame contents
         self.setup_home_frame()
@@ -46,11 +101,13 @@ class LabManagementSystem(ctk.CTk):
         self.setup_teachers_frame()
         self.setup_consult_frame()
 
-        # Show default frame
-        self.select_frame_by_name("home")
-        
-        # Update statistics
-        self.update_statistics()
+    def toggle_fullscreen(self, event=None):
+        self.fullscreen = not self.fullscreen
+        self.attributes("-fullscreen", self.fullscreen)
+
+    def exit_fullscreen(self, event=None):
+        self.fullscreen = False
+        self.attributes("-fullscreen", False)
 
     def setup_database(self):
         """Initialize SQLite database with the new practice structure"""
@@ -95,48 +152,94 @@ class LabManagementSystem(ctk.CTk):
 
     def setup_navigation_frame(self):
         """Setup the navigation sidebar"""
-        self.navigation_frame = ctk.CTkFrame(self, corner_radius=0)
-        self.navigation_frame.grid(row=0, column=0, sticky="nsew")
-        self.navigation_frame.grid_rowconfigure(4, weight=1)
-
+        nav_style = {
+            "corner_radius": 0,
+            "fg_color": "gray20",
+            "border_width": 1,
+            "border_color": "gray30"
+        }
+        
+        # Calculate width (25% of screen width)
+        nav_width = int(self.winfo_screenwidth() * 0.25)
+        
+        self.navigation_frame = ctk.CTkFrame(self, width=nav_width, **nav_style)
+        self.navigation_frame.grid(row=0, column=0, sticky="nsew", padx=(10,5), pady=10)
+        self.navigation_frame.grid_propagate(False)  # Prevent frame from resizing
+        
         # Navigation header
-        self.navigation_frame_label = ctk.CTkLabel(
-            self.navigation_frame, text="Lab Management", 
-            compound="left", font=ctk.CTkFont(size=15, weight="bold"))
-        self.navigation_frame_label.grid(row=0, column=0, padx=20, pady=20)
+        header_frame = ctk.CTkFrame(self.navigation_frame, fg_color="transparent")
+        header_frame.grid(row=0, column=0, padx=10, pady=(20,30), sticky="ew")
+        header_frame.grid_columnconfigure(0, weight=1)
+        
+        ctk.CTkLabel(
+            header_frame,
+            text="Lab Management",
+            font=ctk.CTkFont(size=24, weight="bold")
+        ).grid(row=0, column=0, pady=10)
 
         # Navigation buttons
         buttons = [
-            ("Home", self.home_button_event),
-            ("Upload Practice", self.upload_button_event),
-            ("Manage Teachers", self.teachers_button_event),
-            ("Consult Practices", self.consult_button_event)  # New button
+            ("Home", "home", self.home_button_event),
+            ("Upload Practice", "upload", self.upload_button_event),
+            ("Manage Teachers", "teachers", self.teachers_button_event),
+            ("Consult Practices", "consult", self.consult_button_event)
         ]
 
-        for idx, (text, command) in enumerate(buttons, start=1):
+        self.navigation_frame.grid_columnconfigure(0, weight=1)
+
+        for idx, (text, name, command) in enumerate(buttons):
             btn = ctk.CTkButton(
-                self.navigation_frame, corner_radius=0, height=40,
-                border_spacing=10, text=text,
-                fg_color="transparent", text_color=("gray10", "gray90"),
-                hover_color=("gray70", "gray30"),
-                command=command)
-            btn.grid(row=idx, column=0, sticky="ew")
+                self.navigation_frame,
+                text=text,
+                command=command,
+                width=nav_width-40,  # Account for padding
+                **self.button_style
+            )
+            btn.grid(row=idx+1, column=0, padx=20, pady=10, sticky="ew")
 
     def setup_home_frame(self):
-        """Setup the home dashboard"""
-        # Welcome label
-        self.home_label = ctk.CTkLabel(
-            self.home_frame, text="Welcome to Lab Management System",
-            font=ctk.CTkFont(size=20, weight="bold"))
-        self.home_label.grid(row=0, column=0, padx=20, pady=20)
+        """Setup home frame with better spacing"""
+        self.home_frame.grid_columnconfigure(0, weight=1)
+        
+        # Welcome section with larger text and better spacing
+        welcome_frame = ctk.CTkFrame(self.home_frame, fg_color="transparent")
+        welcome_frame.grid(row=0, column=0, padx=30, pady=(20,10), sticky="ew")
+        welcome_frame.grid_columnconfigure(0, weight=1)
+        
+        ctk.CTkLabel(
+            welcome_frame,
+            text="Welcome to Lab Management System",
+            font=ctk.CTkFont(size=32, weight="bold")  # Increased font size
+        ).grid(row=0, column=0, pady=20)
 
-        # Search frame
-        self.setup_search_frame()
+        # Search section with matching style
+        search_frame = ctk.CTkFrame(self.home_frame, fg_color="gray20")
+        search_frame.grid(row=1, column=0, padx=30, pady=20, sticky="ew")
+        search_frame.grid_columnconfigure(0, weight=3)
+        search_frame.grid_columnconfigure(1, weight=1)
 
-        # Statistics frame
+        self.search_entry = ctk.CTkEntry(
+            search_frame,
+            placeholder_text="Search practices...",
+            height=50,  # Increased height
+            font=ctk.CTkFont(size=16)  # Larger font
+        )
+        self.search_entry.grid(row=0, column=0, padx=20, pady=20, sticky="ew")
+
+        self.search_button = ctk.CTkButton(
+            search_frame,
+            text="Search",
+            height=50,  # Matching height
+            width=150,  # Fixed width
+            font=ctk.CTkFont(size=16, weight="bold"),
+            command=self.search_practices
+        )
+        self.search_button.grid(row=0, column=1, padx=20, pady=20)
+
+        # Setup statistics frame
         self.setup_stats_frame()
 
-        # Recent activities frame
+        # Setup activities frame
         self.setup_activities_frame()
 
     def setup_search_frame(self):
@@ -144,124 +247,188 @@ class LabManagementSystem(ctk.CTk):
         search_frame = ctk.CTkFrame(self.home_frame)
         search_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
 
-        self.search_entry = ctk.CTkEntry(search_frame, width=300, placeholder_text="Search practices...")
+        self.search_entry = ctk.CTkEntry(
+            search_frame, 
+            width=300, 
+            placeholder_text="Search practices...",
+            **self.entry_style
+        )
         self.search_entry.grid(row=0, column=0, padx=10, pady=10)
 
         self.search_button = ctk.CTkButton(
-            search_frame, text="Search", command=self.search_practices)
+            search_frame, 
+            text="Search", 
+            command=self.search_practices,
+            **self.button_style
+        )
         self.search_button.grid(row=0, column=1, padx=10, pady=10)
 
     def setup_stats_frame(self):
         """Setup statistics display"""
-        self.stats_frame = ctk.CTkFrame(self.home_frame)
-        self.stats_frame.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
+        stats_frame = ctk.CTkFrame(self.home_frame, fg_color="gray20")
+        stats_frame.grid(row=2, column=0, padx=30, pady=20, sticky="ew")
+        stats_frame.grid_columnconfigure((0,1), weight=1)
 
+        # Create statistics labels with larger text
         self.total_practices_label = ctk.CTkLabel(
-            self.stats_frame, text="Total Practices: 0")
-        self.total_practices_label.grid(row=0, column=0, padx=20, pady=10)
+            stats_frame, 
+            text="Total Practices: 0",
+            font=ctk.CTkFont(size=20, weight="bold")
+        )
+        self.total_practices_label.grid(row=0, column=0, padx=30, pady=20)
 
         self.total_teachers_label = ctk.CTkLabel(
-            self.stats_frame, text="Total Teachers: 0")
-        self.total_teachers_label.grid(row=0, column=1, padx=20, pady=10)
+            stats_frame, 
+            text="Total Teachers: 0",
+            font=ctk.CTkFont(size=20, weight="bold")
+        )
+        self.total_teachers_label.grid(row=0, column=1, padx=30, pady=20)
 
     def setup_activities_frame(self):
         """Setup recent activities display"""
-        self.activities_frame = ctk.CTkFrame(self.home_frame)
-        self.activities_frame.grid(row=3, column=0, padx=20, pady=10, sticky="nsew")
+        self.activities_frame = ctk.CTkFrame(self.home_frame, fg_color="gray20")
+        self.activities_frame.grid(row=3, column=0, padx=30, pady=20, sticky="nsew")
+        self.activities_frame.grid_columnconfigure(0, weight=1)
 
         self.activities_label = ctk.CTkLabel(
-            self.activities_frame, text="Recent Activities",
-            font=ctk.CTkFont(weight="bold"))
-        self.activities_label.grid(row=0, column=0, padx=20, pady=10)
+            self.activities_frame, 
+            text="Recent Activities",
+            font=ctk.CTkFont(size=24, weight="bold")
+        )
+        self.activities_label.grid(row=0, column=0, padx=20, pady=20)
 
-        self.activities_list = ctk.CTkTextbox(self.activities_frame, height=200)
-        self.activities_list.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
+        self.activities_list = ctk.CTkTextbox(
+            self.activities_frame, 
+            height=300,
+            font=ctk.CTkFont(size=16)
+        )
+        self.activities_list.grid(row=1, column=0, padx=20, pady=(0,20), sticky="ew")
 
     def setup_upload_frame(self):
-        """Setup practice upload form"""
-        # Title
-        self.upload_label = ctk.CTkLabel(
-            self.upload_frame, text="Upload New Practice",
-            font=ctk.CTkFont(size=20, weight="bold"))
-        self.upload_label.grid(row=0, column=0, padx=20, pady=20, columnspan=2)
+        """Setup practice upload form with improved layout"""
+        self.upload_frame.grid_columnconfigure(0, weight=1)
+        
+        # Title section with larger text
+        title_frame = ctk.CTkFrame(self.upload_frame, fg_color="transparent")
+        title_frame.grid(row=0, column=0, padx=30, pady=(20,30), sticky="ew")
+        title_frame.grid_columnconfigure(0, weight=1)
+        
+        ctk.CTkLabel(
+            title_frame,
+            text="Upload New Practice",
+            font=ctk.CTkFont(size=24, weight="bold")
+        ).grid(row=0, column=0)
+
+        # Main form container
+        form_frame = ctk.CTkFrame(self.upload_frame, fg_color="gray20")
+        form_frame.grid(row=1, column=0, padx=30, pady=(0,20), sticky="ew")
+        form_frame.grid_columnconfigure(1, weight=1)
 
         # Practice Title
-        title_label = ctk.CTkLabel(self.upload_frame, text="Practice Title:")
-        title_label.grid(row=1, column=0, padx=20, pady=5)
-        self.title_entry = ctk.CTkEntry(self.upload_frame, width=300)
-        self.title_entry.grid(row=1, column=1, padx=20, pady=5)
+        ctk.CTkLabel(
+            form_frame, 
+            text="Practice Title:", 
+            font=ctk.CTkFont(size=16)
+        ).grid(row=0, column=0, padx=20, pady=15, sticky="e")
+        
+        self.title_entry = ctk.CTkEntry(
+            form_frame,
+            height=40,
+            font=ctk.CTkFont(size=16)
+        )
+        self.title_entry.grid(row=0, column=1, padx=(0,20), pady=15, sticky="ew")
 
         # Teacher Selection
-        teacher_label = ctk.CTkLabel(self.upload_frame, text="Teacher:")
-        teacher_label.grid(row=2, column=0, padx=20, pady=5)
+        ctk.CTkLabel(
+            form_frame, 
+            text="Teacher:", 
+            font=ctk.CTkFont(size=16)
+        ).grid(row=1, column=0, padx=20, pady=15, sticky="e")
+        
         self.teacher_combo = ctk.CTkComboBox(
-            self.upload_frame, 
-            width=300,
+            form_frame,
+            height=40,
+            font=ctk.CTkFont(size=16),
             values=self.get_teacher_names(),
-            command=self.on_teacher_select  # Add callback for teacher selection
+            command=self.on_teacher_select
         )
-        self.teacher_combo.grid(row=2, column=1, padx=20, pady=5)
+        self.teacher_combo.grid(row=1, column=1, padx=(0,20), pady=15, sticky="ew")
 
-        # Subject Selection (initially disabled)
-        subject_label = ctk.CTkLabel(self.upload_frame, text="Subject:")
-        subject_label.grid(row=3, column=0, padx=20, pady=5)
-        self.subject_combo = ctk.CTkComboBox(
-            self.upload_frame,
-            width=300,
-            values=[],  # Initially empty
+        # Subject Selection
+        ctk.CTkLabel(
+            form_frame, 
+            text="Subject:", 
+            font=ctk.CTkFont(size=16)
+        ).grid(row=2, column=0, padx=20, pady=15, sticky="e")
+        
+        self.upload_subject_combo = ctk.CTkComboBox(  # Changed name here
+            form_frame,
+            height=40,
+            font=ctk.CTkFont(size=16),
+            values=[],
             state="disabled"
         )
-        self.subject_combo.grid(row=3, column=1, padx=20, pady=5)
+        self.upload_subject_combo.grid(row=2, column=1, padx=(0,20), pady=15, sticky="ew")
 
-        # Optional Objective
-        objective_label = ctk.CTkLabel(self.upload_frame, text="Objective (Optional):")
-        objective_label.grid(row=4, column=0, padx=20, pady=5)
-        self.objective_text = ctk.CTkTextbox(self.upload_frame, height=100, width=300)
-        self.objective_text.grid(row=4, column=1, padx=20, pady=5)
-
-        # File Selection
-        self.upload_file_button = ctk.CTkButton(
-            self.upload_frame, 
-            text="Select File",
-            command=self.select_file
+        # Objective
+        ctk.CTkLabel(
+            form_frame, 
+            text="Objective:", 
+            font=ctk.CTkFont(size=16)
+        ).grid(row=3, column=0, padx=20, pady=15, sticky="ne")
+        
+        self.objective_text = ctk.CTkTextbox(
+            form_frame,
+            height=100,
+            font=ctk.CTkFont(size=16)
         )
-        self.upload_file_button.grid(row=5, column=0, columnspan=2, pady=20)
+        self.objective_text.grid(row=3, column=1, padx=(0,20), pady=15, sticky="ew")
 
-        file_section = ctk.CTkFrame(self.upload_frame)
-        file_section.grid(row=5, column=0, columnspan=2, pady=10, sticky="nsew")
+        # File upload section
+        file_frame = ctk.CTkFrame(self.upload_frame, fg_color="gray20")
+        file_frame.grid(row=2, column=0, padx=30, pady=20, sticky="ew")
+        file_frame.grid_columnconfigure(0, weight=1)
 
         # File Selection Button
         self.upload_file_button = ctk.CTkButton(
-            file_section, 
+            file_frame,
             text="Select File",
+            height=45,
+            font=ctk.CTkFont(size=16, weight="bold"),
             command=self.select_file
         )
-        self.upload_file_button.grid(row=0, column=0, columnspan=2, pady=10)
+        self.upload_file_button.grid(row=0, column=0, padx=20, pady=(20,10))
 
         # Preview Label
         self.preview_label = ctk.CTkLabel(
-            file_section,
+            file_frame,
             text="File Preview",
-            font=ctk.CTkFont(weight="bold")
+            font=ctk.CTkFont(size=16, weight="bold")
         )
-        self.preview_label.grid(row=1, column=0, columnspan=2, pady=5)
+        self.preview_label.grid(row=1, column=0, pady=(10,5))
 
         # Preview Frame
-        self.preview_frame = ctk.CTkFrame(file_section, width=400, height=500)
-        self.preview_frame.grid(row=2, column=0, columnspan=2, padx=20, pady=10)
-        self.preview_frame.grid_propagate(False)  # Maintain size
+        self.preview_frame = ctk.CTkFrame(file_frame, fg_color="gray25")
+        self.preview_frame.grid(row=2, column=0, padx=20, pady=(5,20), sticky="ew")
+        self.preview_frame.grid_columnconfigure(0, weight=1)
 
-        # Preview Label (for image)
-        self.preview_image_label = ctk.CTkLabel(self.preview_frame, text="")
+        # Preview Image Label
+        self.preview_image_label = ctk.CTkLabel(
+            self.preview_frame,
+            text="No file selected",
+            font=ctk.CTkFont(size=14)
+        )
         self.preview_image_label.grid(row=0, column=0, padx=10, pady=10)
 
         # Submit Button
         self.submit_practice_button = ctk.CTkButton(
-            self.upload_frame, 
+            self.upload_frame,
             text="Submit Practice",
+            height=50,
+            font=ctk.CTkFont(size=16, weight="bold"),
             command=self.submit_practice
         )
-        self.submit_practice_button.grid(row=6, column=0, columnspan=2, pady=10)
+        self.submit_practice_button.grid(row=3, column=0, padx=30, pady=20)
 
     def on_teacher_select(self, choice):
         """Handle teacher selection and update subject combo box"""
@@ -278,15 +445,15 @@ class LabManagementSystem(ctk.CTk):
                 if result and result[0]:
                     # Enable subject combo box and update values
                     subjects = result[0].split(',')
-                    self.subject_combo.configure(
+                    self.upload_subject_combo.configure(  # Changed here
                         state="normal",
                         values=subjects
                     )
                     # Set first subject as default
                     if subjects:
-                        self.subject_combo.set(subjects[0])
+                        self.upload_subject_combo.set(subjects[0])  # Changed here
                 else:
-                    self.subject_combo.configure(
+                    self.upload_subject_combo.configure(  # Changed here
                         state="disabled",
                         values=[]
                     )
@@ -294,18 +461,152 @@ class LabManagementSystem(ctk.CTk):
                 messagebox.showerror("Error", f"Failed to load subjects: {str(e)}")
 
     def setup_teachers_frame(self):
-        """Setup teacher management interface"""
-        # Header
-        self.teachers_label = ctk.CTkLabel(
-            self.teachers_frame, text="Teachers Management",
-            font=ctk.CTkFont(size=20, weight="bold"))
-        self.teachers_label.grid(row=0, column=0, padx=20, pady=20, columnspan=2)
+        """Setup teacher management interface with improved layout"""
+        self.teachers_frame.grid_columnconfigure(0, weight=1)
+        
+        # Title section
+        title_frame = ctk.CTkFrame(self.teachers_frame, fg_color="transparent")
+        title_frame.grid(row=0, column=0, padx=30, pady=(20,30), sticky="ew")
+        title_frame.grid_columnconfigure(0, weight=1)
+        
+        ctk.CTkLabel(
+            title_frame,
+            text="Teachers Management",
+            font=ctk.CTkFont(size=24, weight="bold")
+        ).grid(row=0, column=0)
 
-        # Create teachers table
-        self.setup_teachers_table()
+        # Table section
+        table_frame = ctk.CTkFrame(self.teachers_frame, fg_color="gray20")
+        table_frame.grid(row=1, column=0, padx=30, pady=(0,20), sticky="nsew")
+        table_frame.grid_columnconfigure(0, weight=1)
 
-        # Add teacher section
-        self.setup_add_teacher_section()
+        # Table headers with improved styling
+        headers_frame = ctk.CTkFrame(table_frame, fg_color="gray25")
+        headers_frame.grid(row=0, column=0, sticky="ew", padx=20, pady=10)
+        headers_frame.grid_columnconfigure((0,1,2,3,4), weight=1)
+
+        headers = ["ID", "Name", "Subjects", "Number of Subjects", "Practices Uploaded"]
+        for i, header in enumerate(headers):
+            ctk.CTkLabel(
+                headers_frame,
+                text=header,
+                font=ctk.CTkFont(size=16, weight="bold"),
+                text_color="white"
+            ).grid(row=0, column=i, padx=20, pady=10)
+
+        # Create scrollable frame for table content
+        self.teachers_table = ctk.CTkScrollableFrame(
+            table_frame,
+            height=300,
+            fg_color="transparent"
+        )
+        self.teachers_table.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0,20))
+        self.teachers_table.grid_columnconfigure((0,1,2,3,4), weight=1)
+
+        # Update table content
+        self.update_teachers_table()
+
+        # Create a scrollable frame for the "Add New Teacher" section
+        add_section_container = ctk.CTkScrollableFrame(
+            self.teachers_frame,
+            fg_color="gray20",
+            height=400  # Adjust this value as needed
+        )
+        add_section_container.grid(row=2, column=0, padx=30, pady=20, sticky="ew")
+        add_section_container.grid_columnconfigure(1, weight=1)
+
+        # Section title
+        ctk.CTkLabel(
+            add_section_container,
+            text="Add New Teacher",
+            font=ctk.CTkFont(size=20, weight="bold")
+        ).grid(row=0, column=0, columnspan=2, padx=20, pady=20)
+
+        # Form fields
+        # Teacher name
+        ctk.CTkLabel(
+            add_section_container,
+            text="Name:",
+            **self.label_style
+        ).grid(row=1, column=0, padx=20, pady=15, sticky="e")
+        
+        self.teacher_name_entry = ctk.CTkEntry(
+            add_section_container,
+            **self.entry_style
+        )
+        self.teacher_name_entry.grid(row=1, column=1, padx=(0,20), pady=15, sticky="ew")
+
+        # Subjects
+        ctk.CTkLabel(
+            add_section_container,
+            text="Subjects:",
+            **self.label_style
+        ).grid(row=2, column=0, padx=20, pady=15, sticky="e")
+
+        # Subject selection
+        subjects_frame = ctk.CTkFrame(add_section_container, fg_color="transparent")
+        subjects_frame.grid(row=2, column=1, padx=(0,20), pady=15, sticky="ew")
+        subjects_frame.grid_columnconfigure(0, weight=1)
+
+        # Subject combo box for adding new subjects
+        self.add_subject_combo = ctk.CTkComboBox(
+            subjects_frame,
+            values=self.get_existing_subjects(),
+            width=200,
+            **self.entry_style
+        )
+        self.add_subject_combo.grid(row=0, column=0, sticky="ew")
+
+        # Add subject button
+        add_subject_btn = ctk.CTkButton(
+            subjects_frame,
+            text="+",
+            width=40,
+            command=self.add_subject_to_list,
+            **self.button_style
+        )
+        add_subject_btn.grid(row=0, column=1, padx=(10,0))
+
+        # Subjects display frame
+        subjects_container = ctk.CTkFrame(
+            add_section_container,
+            fg_color="transparent"
+        )
+        subjects_container.grid(row=3, column=1, padx=(0,20), pady=15, sticky="ew")
+        subjects_container.grid_columnconfigure(0, weight=1)
+
+        # Create a scrollable frame for subjects
+        self.subjects_display_frame = ctk.CTkScrollableFrame(
+            subjects_container,
+            height=150,
+            fg_color="gray25",
+            width=400
+        )
+        self.subjects_display_frame.grid(row=0, column=0, sticky="ew")
+        self.subjects_display_frame.grid_columnconfigure(0, weight=1)
+
+        # Admin password
+        ctk.CTkLabel(
+            add_section_container,
+            text="Admin Password:",
+            **self.label_style
+        ).grid(row=4, column=0, padx=20, pady=15, sticky="e")
+        
+        self.password_entry = ctk.CTkEntry(
+            add_section_container,
+            show="*",
+            **self.entry_style
+        )
+        self.password_entry.grid(row=4, column=1, padx=(0,20), pady=15, sticky="ew")
+
+        # Add teacher button
+        self.add_teacher_button = ctk.CTkButton(
+            add_section_container,
+            text="Add Teacher",
+            command=self.add_teacher,
+            **self.button_style
+        )
+        self.add_teacher_button.grid(row=5, column=0, columnspan=2, pady=30)
 
     def setup_teachers_table(self):
         """Setup table to display teachers information"""
@@ -331,10 +632,23 @@ class LabManagementSystem(ctk.CTk):
         self.update_teachers_table()
 
     def update_teachers_table(self):
-        """Update teachers table with current data"""
+        """Update teachers table with improved styling and alignment"""
         # Clear existing content
         for widget in self.teachers_table.winfo_children():
             widget.destroy()
+
+        # Configure columns with weights
+        for i in range(5):
+            self.teachers_table.grid_columnconfigure(i, weight=1)
+
+        # Column widths (adjust these values as needed)
+        column_widths = {
+            0: 50,   # ID
+            1: 150,  # Name
+            2: 300,  # Subjects
+            3: 150,  # Number of Subjects
+            4: 150   # Practices Uploaded
+        }
 
         # Get teachers data
         self.cursor.execute("""
@@ -347,28 +661,65 @@ class LabManagementSystem(ctk.CTk):
         """)
         teachers = self.cursor.fetchall()
 
-        # Display teachers
+        # Display teachers with improved styling and alignment
         for row, teacher in enumerate(teachers):
+            # Create a frame for each row
+            row_frame = ctk.CTkFrame(
+                self.teachers_table,
+                fg_color="gray20" if row % 2 == 0 else "gray25",
+                height=50
+            )
+            row_frame.grid(row=row, column=0, columnspan=5, sticky="ew", pady=1)
+            
+            # Configure columns in row frame
+            for i in range(5):
+                row_frame.grid_columnconfigure(i, weight=1, minsize=column_widths[i])
+
             # ID
-            ctk.CTkLabel(self.teachers_table, text=str(teacher[0])).grid(
-                row=row, column=0, padx=10, pady=5, sticky="w")
+            ctk.CTkLabel(
+                row_frame,
+                text=str(teacher[0]),
+                width=column_widths[0],
+                anchor="center",
+                **self.label_style
+            ).grid(row=0, column=0, padx=5, pady=10, sticky="ew")
             
             # Name
-            ctk.CTkLabel(self.teachers_table, text=teacher[1]).grid(
-                row=row, column=1, padx=10, pady=5, sticky="w")
+            ctk.CTkLabel(
+                row_frame,
+                text=teacher[1],
+                width=column_widths[1],
+                anchor="w",
+                **self.label_style
+            ).grid(row=0, column=1, padx=5, pady=10, sticky="ew")
             
-            # Subjects (comma-separated list)
+            # Subjects
             subjects = teacher[2].split(',') if teacher[2] else []
-            ctk.CTkLabel(self.teachers_table, text=', '.join(subjects)).grid(
-                row=row, column=2, padx=10, pady=5, sticky="w")
+            ctk.CTkLabel(
+                row_frame,
+                text=', '.join(subjects),
+                width=column_widths[2],
+                anchor="w",
+                **self.label_style
+            ).grid(row=0, column=2, padx=5, pady=10, sticky="ew")
             
             # Number of subjects
-            ctk.CTkLabel(self.teachers_table, text=str(len(subjects))).grid(
-                row=row, column=3, padx=10, pady=5, sticky="w")
+            ctk.CTkLabel(
+                row_frame,
+                text=str(len(subjects)),
+                width=column_widths[3],
+                anchor="center",
+                **self.label_style
+            ).grid(row=0, column=3, padx=5, pady=10, sticky="ew")
             
             # Practices count
-            ctk.CTkLabel(self.teachers_table, text=str(teacher[3])).grid(
-                row=row, column=4, padx=10, pady=5, sticky="w")
+            ctk.CTkLabel(
+                row_frame,
+                text=str(teacher[3]),
+                width=column_widths[4],
+                anchor="center",
+                **self.label_style
+            ).grid(row=0, column=4, padx=5, pady=10, sticky="ew")
         
     def setup_add_teacher_section(self):
         """Setup section for adding new teachers"""
@@ -439,27 +790,20 @@ class LabManagementSystem(ctk.CTk):
 
     def add_subject_to_list(self):
         """Add subject to the list of subjects"""
-        subject = self.subject_combo.get().strip()
+        subject = self.add_subject_combo.get().strip()  # Use the renamed combo box
         
         if not subject:
             return
         
-        # Check if subject already exists (case-insensitive)
-        existing_subjects = self.get_existing_subjects()
-        if any(existing.lower() == subject.lower() for existing in existing_subjects):
-            # If it exists, use the existing case
-            subject = next(existing for existing in existing_subjects 
-                        if existing.lower() == subject.lower())
-        
-        # Check if subject is already in the list (case-insensitive)
-        if any(existing.lower() == subject.lower() for existing in self.subjects_list):
+        # Check if subject already exists in the list
+        if subject in self.subjects_list:
             messagebox.showwarning("Warning", "This subject has already been added")
             return
         
         # Add the subject
         self.subjects_list.append(subject)
         self.update_subjects_display()
-        self.subject_combo.set("")  # Clear the input
+        self.add_subject_combo.set("")  # Clear the input
 
     def update_subjects_display(self):
         """Update the display of added subjects with delete buttons"""
@@ -468,22 +812,34 @@ class LabManagementSystem(ctk.CTk):
             widget.destroy()
 
         # Add each subject with a delete button
-        for i, subject in enumerate(self.subjects_list):
-            subject_frame = ctk.CTkFrame(self.subjects_display_frame)
+        for subject in self.subjects_list:
+            subject_frame = ctk.CTkFrame(
+                self.subjects_display_frame,
+                fg_color="gray30"
+            )
             subject_frame.pack(fill="x", padx=5, pady=2)
+            subject_frame.grid_columnconfigure(0, weight=1)
 
             # Subject label
-            ctk.CTkLabel(subject_frame, text=f"• {subject}").pack(side="left", padx=5)
+            subject_label = ctk.CTkLabel(
+                subject_frame,
+                text=f"• {subject}",
+                anchor="w",
+                **self.label_style
+            )
+            subject_label.pack(side="left", padx=10, pady=5, fill="x", expand=True)
 
             # Delete button
-            delete_btn = ctk.CTkButton(
+            delete_button = ctk.CTkButton(
                 subject_frame,
                 text="×",
-                width=20,
-                height=20,
-                command=lambda s=subject: self.delete_subject(s)
+                width=30,
+                height=30,
+                command=lambda s=subject: self.delete_subject(s),
+                fg_color="red",
+                hover_color="dark red"
             )
-            delete_btn.pack(side="right", padx=5)
+            delete_button.pack(side="right", padx=5, pady=5)
 
     def add_teacher(self):
         """Add new teacher to database with password verification"""
@@ -600,7 +956,7 @@ class LabManagementSystem(ctk.CTk):
         try:
             # Get teacher information
             teacher_name = self.teacher_combo.get()
-            subject = self.subject_combo.get()
+            subject = self.upload_subject_combo.get()  
             practice_title = self.sanitize_filename(self.title_entry.get())  # Use sanitize_filename here
 
             # Get teacher ID
@@ -688,7 +1044,7 @@ class LabManagementSystem(ctk.CTk):
         if not self.teacher_combo.get():
             messagebox.showerror("Error", "Please select a teacher")
             return False
-        if not self.subject_combo.get():
+        if not self.upload_subject_combo.get():  # Changed here
             messagebox.showerror("Error", "Please select a subject")
             return False
         if not hasattr(self, 'selected_file_path'):
@@ -700,10 +1056,10 @@ class LabManagementSystem(ctk.CTk):
         """Clear practice form inputs"""
         self.title_entry.delete(0, 'end')
         self.teacher_combo.set('')
-        self.subject_combo.configure(state="disabled", values=[])
+        self.upload_subject_combo.configure(state="disabled", values=[])  # Changed here
         self.objective_text.delete("1.0", "end")
         self.upload_file_button.configure(text="Select File")
-        self.preview_image_label.configure(image="", text="")  # Clear preview
+        self.preview_image_label.configure(image="", text="")
         if hasattr(self, 'selected_file_path'):
             del self.selected_file_path
 
@@ -760,7 +1116,7 @@ class LabManagementSystem(ctk.CTk):
         
         for frame_name, frame in frames.items():
             if frame_name == name:
-                frame.grid(row=0, column=1, sticky="nsew")
+                frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=10)
             else:
                 frame.grid_remove()
 
@@ -812,59 +1168,98 @@ class LabManagementSystem(ctk.CTk):
             }
         
     def setup_consult_frame(self):
-        """Setup practice consultation interface"""
-        self.consult_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        """Setup practice consultation interface with improved layout"""
+        self.consult_frame.grid_columnconfigure(0, weight=1)
         
-        # Title
-        self.consult_label = ctk.CTkLabel(
-            self.consult_frame, text="Consult Practices",
-            font=ctk.CTkFont(size=20, weight="bold"))
-        self.consult_label.grid(row=0, column=0, padx=20, pady=20, columnspan=2)
+        # Title section with larger text
+        title_frame = ctk.CTkFrame(self.consult_frame, fg_color="transparent")
+        title_frame.grid(row=0, column=0, padx=30, pady=(20,30), sticky="ew")
+        title_frame.grid_columnconfigure(0, weight=1)
+        
+        ctk.CTkLabel(
+            title_frame,
+            text="Consult Practices",
+            font=ctk.CTkFont(size=24, weight="bold")
+        ).grid(row=0, column=0)
 
-        # Search options frame
-        search_options = ctk.CTkFrame(self.consult_frame)
-        search_options.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
+        # Search options frame with improved styling
+        search_frame = ctk.CTkFrame(self.consult_frame, fg_color="gray20")
+        search_frame.grid(row=1, column=0, padx=30, pady=(0,20), sticky="ew")
+        search_frame.grid_columnconfigure((1, 2), weight=1)
 
-        # Practice ID search
-        self.practice_id_label = ctk.CTkLabel(search_options, text="Practice ID:")
-        self.practice_id_label.grid(row=0, column=0, padx=10, pady=5)
-        self.practice_id_entry = ctk.CTkEntry(search_options, width=100)
-        self.practice_id_entry.grid(row=0, column=1, padx=10, pady=5)
+        # Practice ID search with consistent styling
+        ctk.CTkLabel(
+            search_frame,
+            text="Practice ID:",
+            **self.label_style
+        ).grid(row=0, column=0, padx=20, pady=15, sticky="e")
+        
+        self.practice_id_entry = ctk.CTkEntry(
+            search_frame,
+            width=200,
+            **self.entry_style
+        )
+        self.practice_id_entry.grid(row=0, column=1, padx=(0,20), pady=15, sticky="w")
+        
         self.search_by_id_button = ctk.CTkButton(
-            search_options, text="Search by ID",
-            command=self.search_by_practice_id)
-        self.search_by_id_button.grid(row=0, column=2, padx=10, pady=5)
+            search_frame,
+            text="Search by ID",
+            command=self.search_by_practice_id,
+            **self.button_style
+        )
+        self.search_by_id_button.grid(row=0, column=2, padx=20, pady=15)
 
-        # Teacher search
-        self.teacher_search_label = ctk.CTkLabel(search_options, text="Teacher:")
-        self.teacher_search_label.grid(row=1, column=0, padx=10, pady=5)
+        # Teacher search with consistent styling
+        ctk.CTkLabel(
+            search_frame,
+            text="Teacher:",
+            **self.label_style
+        ).grid(row=1, column=0, padx=20, pady=15, sticky="e")
+        
         self.teacher_search_combo = ctk.CTkComboBox(
-            search_options, width=200,
-            values=self.get_teacher_names())
-        self.teacher_search_combo.grid(row=1, column=1, padx=10, pady=5)
+            search_frame,
+            values=self.get_teacher_names(),
+            width=200,
+            **self.entry_style
+        )
+        self.teacher_search_combo.grid(row=1, column=1, padx=(0,20), pady=15, sticky="w")
+        
         self.search_by_teacher_button = ctk.CTkButton(
-            search_options, text="Search by Teacher",
-            command=self.search_by_teacher)
-        self.search_by_teacher_button.grid(row=1, column=2, padx=10, pady=5)
+            search_frame,
+            text="Search by Teacher",
+            command=self.search_by_teacher,
+            **self.button_style
+        )
+        self.search_by_teacher_button.grid(row=1, column=2, padx=20, pady=15)
 
-        # Results frame
-        self.results_frame = ctk.CTkFrame(self.consult_frame)
-        self.results_frame.grid(row=2, column=0, padx=20, pady=10, sticky="nsew")
+        # Results section with improved styling
+        results_frame = ctk.CTkFrame(self.consult_frame, fg_color="gray20")
+        results_frame.grid(row=2, column=0, padx=30, pady=20, sticky="nsew")
+        results_frame.grid_columnconfigure(0, weight=1)
 
-        # Results list
-        self.results_label = ctk.CTkLabel(
-            self.results_frame, text="Practice List",
-            font=ctk.CTkFont(weight="bold"))
-        self.results_label.pack(pady=10)
+        # Results header
+        ctk.CTkLabel(
+            results_frame,
+            text="Practice List",
+            font=ctk.CTkFont(size=20, weight="bold")
+        ).grid(row=0, column=0, padx=20, pady=15)
 
-        self.practice_listbox = ctk.CTkTextbox(self.results_frame, height=300)
-        self.practice_listbox.pack(padx=20, pady=10, fill="both", expand=True)
+        # Results textbox with improved styling
+        self.practice_listbox = ctk.CTkTextbox(
+            results_frame,
+            height=300,
+            font=ctk.CTkFont(size=16)
+        )
+        self.practice_listbox.grid(row=1, column=0, padx=20, pady=(0,20), sticky="nsew")
 
-        # Generate PDF button
+        # Generate PDF button with consistent styling
         self.generate_pdf_button = ctk.CTkButton(
-            self.consult_frame, text="Generate PDF Report",
-            command=self.generate_practice_pdf)
-        self.generate_pdf_button.grid(row=3, column=0, pady=20)
+            self.consult_frame,
+            text="Generate PDF Report",
+            command=self.generate_practice_pdf,
+            **self.button_style
+        )
+        self.generate_pdf_button.grid(row=3, column=0, padx=30, pady=20)
 
     def search_by_practice_id(self):
         """Search practice by ID"""
